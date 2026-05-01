@@ -269,6 +269,35 @@ def print_report(summary):
     else:
         print("\n  [OK] No critical threats detected")
 
+
+
+# ─────────────────────────────────────────────────────────
+#  SIEM UPLOAD
+# ─────────────────────────────────────────────────────────
+def _upload_to_siem(events):
+    """Map log-analyzer events to SIEM schema and push to portfolio dashboard."""
+    severity_map = {
+        "LOW": "INFO", "MEDIUM": "WARN",
+        "HIGH": "ALERT", "CRITICAL": "ALERT", "INFO": "INFO",
+    }
+    try:
+        from tools.log_writer import log_event
+        for e in events:
+            log_event(
+                source="Log-Analyzer",
+                level=severity_map.get(e.get("severity", "LOW"), "INFO"),
+                event_type=e["event_type"],
+                message=e["description"],
+                context={
+                    "source_ip": e.get("source_ip") or None,
+                    "raw": (e.get("raw") or "")[:300] or None,
+                },
+            )
+        from tools.upload_logs import push_logs_to_github
+        push_logs_to_github()
+    except Exception as exc:
+        print(f"[WARN] SIEM upload failed: {exc}")
+
 # ─────────────────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────────────────
@@ -303,6 +332,7 @@ def main():
 
     summary = export_siem(all_events, SIEM_OUTPUT_FILE)
     print_report(summary)
+    _upload_to_siem(all_events)
 
 if __name__ == "__main__":
     main()
